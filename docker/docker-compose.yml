@@ -1,0 +1,65 @@
+# https://docs.docker.com/compose/compose-file/
+
+version: '2'
+
+services:
+  zookeeper1:
+    build:
+      dockerfile: Dockerfile.zookeeper
+      context: .
+      args:
+        myid: 1
+    networks:
+      - back
+    ports:
+      - "2181:2181"
+  zookeeper2:
+    build:
+      dockerfile: Dockerfile.zookeeper
+      context: .
+      args:
+        myid: 2
+    networks:
+      - back
+  zookeeper3:
+    build:
+      dockerfile: Dockerfile.zookeeper
+      context: .
+      args:
+        myid: 3
+    networks:
+      - back
+  zookeeper4:
+    build:
+      dockerfile: Dockerfile.zookeeper
+      context: .
+      args:
+        myid: 4
+    networks:
+      - back
+  zookeeper5:
+    build:
+      dockerfile: Dockerfile.zookeeper
+      context: .
+      args:
+        myid: 5
+    networks:
+      - back
+  zkcli:
+    depends_on:
+      - zookeeper1
+      - zookeeper2
+      - zookeeper3
+      - zookeeper4
+      - zookeeper5
+    build:
+      dockerfile: Dockerfile.zkcli
+      context: .
+    stdin_open: true
+    tty: true
+    networks:
+      - back
+
+networks:
+  back:
+    driver: bridge

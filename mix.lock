@@ -1,0 +1,3 @@
+%{"erlzk": {:git, "https://github.com/huaban/erlzk.git", "a005aab956e88686d8d9e719cb3937ae91c98b68", [ref: "a005aab956e88686d8d9e719cb3937ae91c98b68"]},
+  "uuid": {:hex, :uuid, "1.1.5", "96cb36d86ee82f912efea4d50464a5df606bf3f1163d6bdbb302d98474969369", [:mix], []},
+  "zookeeper": {:git, "https://github.com/vishnevskiy/zookeeper-elixir.git", "dc820122e9e2d69e7dadf8a2b079f01146d55c80", []}}
