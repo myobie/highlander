@@ -1,9 +1,9 @@
 defmodule Highlander.Registry do
   require Logger
-  @server Highlander.Registry.Server
+  alias Highlander.Registry.Server
 
   def hostname do
-    GenServer.call(@server, {:hostname})
+    GenServer.call(Server, {:hostname})
   end
 
   # A safe way to call other processes that will not crash if the other process is not found
@@ -35,14 +35,14 @@ defmodule Highlander.Registry do
   end
 
   def whereis_name(name) do
-    GenServer.call(@server, {:whereis_name, name})
+    GenServer.call(Server, {:whereis_name, name})
   end
 
   def register_name(name, pid) do
-    GenServer.call(@server, {:register_name, name, pid})
+    GenServer.call(Server, {:register_name, name, pid})
   end
 
   def unregister_name(name) do
-    GenServer.cast(@server, {:unregister_name, name})
+    GenServer.cast(Server, {:unregister_name, name})
   end
 end
