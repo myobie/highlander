@@ -1,4 +1,5 @@
 defmodule Highlander.Registry.Server do
+  alias Highlander.Registry.ZK
   use GenServer
   require Logger
 
@@ -10,9 +11,7 @@ defmodule Highlander.Registry.Server do
     pids = %{}
     names = %{}
 
-    hostname = Map.get_lazy System.get_env, "ACTOR_HOSTNAME", fn -> UUID.uuid1(:hex) end
-
-    {:ok, %{pids: pids, names: names, hostname: hostname}}
+    {:ok, %{pids: pids, names: names}}
   end
 
   def add(state, {type, id} = name, pid) when is_pid(pid) and is_atom(type) and is_binary(id) do
@@ -39,13 +38,35 @@ defmodule Highlander.Registry.Server do
     state
   end
 
-  def handle_call({:hostname}, _from, %{hostname: hostname} = state) do
-    {:reply, hostname, state}
+  def resolve(hostname) when is_binary(hostname) do
+    if hostname == to_string(Node.self) do
+      Node.self
+    else
+      nodes = Node.list(:known)
+      Enum.find nodes, :unreachable, &(hostname == to_string(&1))
+    end
+  end
+  def resolve(nil), do: nil
+
+  defp whereis_node(hostname, name) do
+    case resolve(hostname) do
+      :unreachable -> {:error, :unreachable}
+      node -> {name, node}
+    end
+  end
+
+  defp whereis_hostname(name) do
+    case ZK.get_hostname(name) do
+      :undefined -> :undefined
+      hostname -> whereis_node(hostname, name)
+    end
   end
 
   def handle_call({:whereis_name, name}, _from, state) do
-    pid = Map.get state.pids, name, :undefined
-    {:reply, pid, state}
+    case Map.get(state.pids, name, :undefined) do
+      :undefined -> {:reply, whereis_hostname(name), state}
+      pid -> {:reply, pid, state}
+    end
   end
 
   def handle_call({:register_name, name, pid}, _from, %{pids: pids} = state) do

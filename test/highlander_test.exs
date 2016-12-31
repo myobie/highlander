@@ -5,7 +5,7 @@ defmodule HighlanderTest do
 
   setup do
     # clear out all actors in the db
-    Zookeeper.Client.delete :zk, "/__actors__", -1, true
+    Zookeeper.Client.delete :zk, "/__shared_objects__", -1, true
     # stop actor id 1 if it's running
     case Highlander.Shared.User.lookup("1") do
       pid when is_pid(pid) -> Process.exit(pid, :shutdown)
