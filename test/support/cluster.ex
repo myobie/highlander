@@ -1,6 +1,8 @@
 # Copied from <https://github.com/phoenixframework/phoenix_pubsub/blob/master/test/support/cluster.ex>
 
-defmodule Highlander.Test.Cluster do
+defmodule HighlanderTest.Cluster do
+  require Logger
+
   def spawn do
     # Turn node into a distributed node with the given long name
     :net_kernel.start([:"primary@127.0.0.1"])
@@ -12,7 +14,7 @@ defmodule Highlander.Test.Cluster do
     nodes = Application.get_env(:highlander, :spawn_nodes, [])
 
     nodes
-    |> Enum.map(&Task.async(fn -> spawn_node(&1) end))
+    |> Enum.map(&Task.async(fn -> {:ok, _node} = spawn_node(&1) end))
     |> Enum.map(&Task.await(&1, 30_000))
   end
 

@@ -42,5 +42,6 @@ $ mix deps.get
 ## Tests
 
 ```sh
+$ epmd -daemon # to allow port mappings and things
 $ mix test
 ```

@@ -1,6 +1,6 @@
 defmodule HighlanderTest do
   require Logger
-  use ExUnit.Case
+  use HighlanderTest.NodeCase
   doctest Highlander
 
   setup do
@@ -12,7 +12,16 @@ defmodule HighlanderTest do
       _ -> nil
     end
 
+    Logger.debug "setup done"
+
     :ok
+  end
+
+  def cleanup(pid) when is_pid(pid) do
+    Process.exit pid, :shutdown
+    ref = Process.monitor pid
+    assert_receive {:DOWN, ^ref, :process, _, _}
+    refute Process.alive?(pid)
   end
 
   test "is connected to zookeeper" do
@@ -24,11 +33,7 @@ defmodule HighlanderTest do
     {:ok, pid} = Highlander.Shared.User.startup "1"
     {:ok, state} = Highlander.Shared.User.get_in_memory_state "1"
     assert state.id == "1"
-
-    Process.exit pid, :shutdown
-    ref = Process.monitor pid
-    assert_receive {:DOWN, ^ref, _, _, _}
-    refute Process.alive?(pid)
+    cleanup pid
 
     {:error, _} = Highlander.Shared.User.get_in_memory_state "1"
   end
@@ -41,11 +46,7 @@ defmodule HighlanderTest do
 
     {:ok, info} = Highlander.Shared.User.get_info "1"
     assert info.email == "me@example.com"
-
-    Process.exit pid, :shutdown
-    ref = Process.monitor pid
-    assert_receive {:DOWN, ^ref, _, _, _}
-    refute Process.alive?(pid)
+    cleanup pid
 
     nil = Highlander.Shared.User.lookup "1"
 
@@ -54,11 +55,7 @@ defmodule HighlanderTest do
 
     pid = Highlander.Shared.User.lookup "1"
     assert is_pid(pid)
-
-    Process.exit pid, :shutdown
-    ref = Process.monitor pid
-    assert_receive {:DOWN, ^ref, _, _, _}
-    refute Process.alive?(pid)
+    cleanup pid
   end
 
   test "cannot create two servers for the same user id" do
@@ -67,10 +64,36 @@ defmodule HighlanderTest do
     {:error, _msg} = Highlander.Shared.User.startup "1"
 
     assert Process.alive?(pid)
+    cleanup pid
+  end
 
-    Process.exit pid, :shutdown
-    ref = Process.monitor pid
-    assert_receive {:DOWN, ^ref, _, _, _}
-    refute Process.alive?(pid)
+  test "can start a server on a seperate node" do
+    # start a user on node1
+    {:ok, pid} = startup_user @node1, "1"
+    assert process_alive?(@node1, pid)
+
+    assert pid == Highlander.Shared.User.lookup("1")
+
+    # set the info over on node2
+    {:ok, _} = set_user_info(@node2, "1", %{email: "me@example.com"})
+
+    # get the info here on primary
+    {:ok, info} = Highlander.Shared.User.get_info "1"
+    assert info.email == "me@example.com"
+
+    cleanup_on_node @node1, pid
+  end
+
+  test "cannot create two servers for the same user id on two different nodes" do
+    {:ok, pid} = startup_user @node1, "1"
+    assert process_alive?(@node1, pid)
+
+    assert pid == Highlander.Shared.User.lookup("1")
+
+    {:error, _msg} = startup_user @node2, "1"
+
+    assert pid == Highlander.Shared.User.lookup("1")
+
+    cleanup_on_node @node1, pid
   end
 end

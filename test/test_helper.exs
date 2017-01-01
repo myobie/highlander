@@ -4,6 +4,6 @@ cond do
   :clustered in exclude ->
     ExUnit.start()
   true ->
-    Highlander.Test.Cluster.spawn()
+    HighlanderTest.Cluster.spawn()
     ExUnit.start()
 end
