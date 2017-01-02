@@ -100,10 +100,13 @@ defmodule Highlander.Registry.Server do
     case resolve(node_name) do
       :unreachable ->
         Logger.debug "#{node} -> #{node_name} is unreachable"
-        {:error, :unreachable}
+        :undefined
       node ->
         Logger.debug "#{node} found #{node_name}: #{inspect([name, node])}"
-        Registry.call node, fn -> Registry.whereis_name(name, local: true) end
+        case :rpc.call(node, Registry, :whereis_name, [name, local: true]) do
+          {:badrpc, _reason} -> :undefined
+          result -> result
+        end
     end
   end
 

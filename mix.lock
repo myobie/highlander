@@ -1,3 +1,6 @@
-%{"erlzk": {:git, "https://github.com/huaban/erlzk.git", "a005aab956e88686d8d9e719cb3937ae91c98b68", [ref: "a005aab956e88686d8d9e719cb3937ae91c98b68"]},
+%{"connection": {:hex, :connection, "1.0.4", "a1cae72211f0eef17705aaededacac3eb30e6625b04a6117c1b2db6ace7d5976", [:mix], []},
+  "erlzk": {:git, "https://github.com/huaban/erlzk.git", "a005aab956e88686d8d9e719cb3937ae91c98b68", [ref: "a005aab956e88686d8d9e719cb3937ae91c98b68"]},
+  "poison": {:hex, :poison, "3.0.0", "625ebd64d33ae2e65201c2c14d6c85c27cc8b68f2d0dd37828fde9c6920dd131", [:mix], []},
+  "redix": {:git, "https://github.com/whatyouhide/redix.git", "b76b1fcb63306875f4050dce7c625ac51a703bf6", []},
   "uuid": {:hex, :uuid, "1.1.5", "96cb36d86ee82f912efea4d50464a5df606bf3f1163d6bdbb302d98474969369", [:mix], []},
   "zookeeper": {:git, "https://github.com/vishnevskiy/zookeeper-elixir.git", "dc820122e9e2d69e7dadf8a2b079f01146d55c80", []}}

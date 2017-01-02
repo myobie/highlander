@@ -1,14 +1,14 @@
 defmodule Highlander.Registry do
   require Logger
-  alias Highlander.Registry.Server
+  alias Highlander.Registry.{Server, NodeCycleServer}
 
   @timeout 500
 
-  def hostname do
-    GenServer.call(Server, {:hostname})
+  def next_node do
+    GenServer.call(NodeCycleServer, :next)
   end
 
-  # A safe way to run a function on another node (must share the same code)
+  # A safe way to run a function on another node
   def call(node, func) when is_atom(node) do
     parent = self
     ref = make_ref
@@ -43,7 +43,8 @@ defmodule Highlander.Registry do
     GenServer.whereis(via)
   end
 
-  def shutdown(_via) do
+  def shutdown({:via, _, _} = via) do
+    GenServer.stop(via)
   end
 
   # via callbacks
@@ -51,9 +52,7 @@ defmodule Highlander.Registry do
   def send(name, message) do
     case whereis_name(name) do
       :undefined -> {:badarg, {name, message}}
-      pid ->
-        Kernel.send pid, message
-        pid
+      pid -> Kernel.send pid, message
     end
   end
 

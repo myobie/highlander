@@ -23,7 +23,9 @@ defmodule Highlander.Mixfile do
 
   defp deps do
     [
-      {:zookeeper, github: "vishnevskiy/zookeeper-elixir"}
+      {:zookeeper, github: "vishnevskiy/zookeeper-elixir"},
+      {:redix, github: "whatyouhide/redix"},
+      {:poison, "~> 3.0"}
     ]
   end
 end

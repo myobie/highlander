@@ -25,10 +25,10 @@ defmodule Highlander.Registry.ZK.ZNode do
   def init({type, _id} = name) when is_atom(type) do
     uuid = UUID.uuid4(:hex)
     path_prefix = prefix(name, uuid)
-    hostname = to_string Node.self
+    node_name = to_string Node.self
 
-    Logger.debug "#{node} creating #{path_prefix}: [#{hostname}] in zookeeper"
-    {:ok, created_path} = Zookeeper.Client.create(:zk, path_prefix, hostname, makepath: true, create_mode: :ephemeral_sequential)
+    Logger.debug "#{node} creating #{path_prefix}: [#{node_name}] in zookeeper"
+    {:ok, created_path} = Zookeeper.Client.create(:zk, path_prefix, node_name, makepath: true, create_mode: :ephemeral_sequential)
 
     znode_name = Path.basename(created_path)
     state = %{znode_name: znode_name, name: name}

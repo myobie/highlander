@@ -5,8 +5,18 @@ defmodule Highlander.Shared.User do
   defdelegate via_tuple(user_id), to: Server
   defdelegate start_child(supervisor, child_spec_or_args), to: Elixir.Supervisor
 
-  def startup(user_id) do
-    start_child Supervisor, [%{user_id: user_id}]
+  def startup(user_id, opts \\ []) do
+    cond do
+      opts[:local] ->
+        start_child(Supervisor, [%{user_id: user_id}])
+      opts[:node] ->
+        case :rpc.call(opts[:node], __MODULE__, :startup, [user_id, [local: true]]) do
+          {:badrpc, _reason} -> {:error, :unreachable}
+          result -> result
+        end
+      true ->
+        startup(user_id, node: Registry.next_node)
+    end
   end
 
   def lookup(user_id) do
@@ -78,25 +88,26 @@ defmodule Highlander.Shared.User.Server do
   end
 
   def bucket(user_id) do
-    "bucket:#{user_id}"
+    "bucket:user:#{user_id}"
   end
 
   def init(%{ user_id: user_id }) do
-    {:ok, %{id: user_id}}
+    info = Info.get(bucket(user_id))
+    {:ok, %{id: user_id, info: info}}
   end
 
   def handle_call({:get_state}, _from, state) do
     {:reply, state, state}
   end
 
-  def handle_call({:get_info}, _from, state) do
-    info = Info.get(bucket(state.id))
+  def handle_call({:get_info}, _from, %{info: info} = state) do
     {:reply, info, state}
   end
 
   def handle_call({:set_info, info}, _from, state) do
     Info.set(bucket(state.id), info)
-    {:reply, info, state}
+    new_state = %{state | info: info}
+    {:reply, info, new_state}
   end
 
   def terminate(reason, _state) do

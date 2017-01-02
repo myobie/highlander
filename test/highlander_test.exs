@@ -1,99 +1,84 @@
 defmodule HighlanderTest do
   require Logger
-  use HighlanderTest.NodeCase
+  use HighlanderTest.NodeCase, async: true
+  alias Highlander.Shared.User
   doctest Highlander
 
-  setup do
+  setup_all do
     # clear out all actors in the db
     Zookeeper.Client.delete :zk, "/__shared_objects__", -1, true
-    # stop actor id 1 if it's running
-    case Highlander.Shared.User.lookup("1") do
-      pid when is_pid(pid) -> Process.exit(pid, :shutdown)
-      _ -> nil
-    end
-
-    Logger.debug "setup done"
-
-    :ok
   end
 
-  def cleanup(pid) when is_pid(pid) do
-    Process.exit pid, :shutdown
-    ref = Process.monitor pid
-    assert_receive {:DOWN, ^ref, :process, _, _}
-    refute Process.alive?(pid)
+  setup do
+    {:ok, %{user_id: UUID.uuid4}}
   end
 
-  test "is connected to zookeeper" do
-    {:ok, list} = Zookeeper.Client.get_children :zk, "/"
-    assert list == ["zookeeper"]
-  end
-
-  test "can start user servers" do
-    {:ok, pid} = Highlander.Shared.User.startup "1"
-    {:ok, state} = Highlander.Shared.User.get_in_memory_state "1"
-    assert state.id == "1"
+  test "can start user servers", %{user_id: user_id} do
+    {:ok, pid} = User.startup user_id
+    {:ok, state} = User.get_in_memory_state user_id
+    assert state.id == user_id
     cleanup pid
 
-    {:error, _} = Highlander.Shared.User.get_in_memory_state "1"
+    {:error, _} = User.get_in_memory_state user_id
   end
 
-  test "servers auto start when asked to do something" do
-    {:ok, _} = Highlander.Shared.User.set_info "1", %{email: "me@example.com"}
+  test "servers auto start when asked to do something", %{user_id: user_id} do
+    {:ok, _} = User.set_info user_id, %{"email" => "me@example.com"}
 
-    pid = Highlander.Shared.User.lookup "1"
+    pid = User.lookup user_id
     assert is_pid(pid)
 
-    {:ok, info} = Highlander.Shared.User.get_info "1"
-    assert info.email == "me@example.com"
+    {:ok, info} = User.get_info user_id
+    assert info["email"] == "me@example.com"
     cleanup pid
 
-    nil = Highlander.Shared.User.lookup "1"
+    nil = User.lookup user_id
 
-    {:ok, info} = Highlander.Shared.User.get_info "1"
-    assert info.email == "me@example.com"
+    {:ok, info} = User.get_info user_id
+    assert info["email"] == "me@example.com"
 
-    pid = Highlander.Shared.User.lookup "1"
+    pid = User.lookup user_id
     assert is_pid(pid)
     cleanup pid
   end
 
-  test "cannot create two servers for the same user id" do
-    {:ok, pid} = Highlander.Shared.User.startup "1"
+  test "cannot create two servers for the same user id", %{user_id: user_id} do
+    {:ok, pid} = User.startup user_id
 
-    {:error, _msg} = Highlander.Shared.User.startup "1"
+    {:error, _msg} = User.startup user_id
 
-    assert Process.alive?(pid)
+    assert alive?(pid)
     cleanup pid
   end
 
-  test "can start a server on a seperate node" do
+  test "can start a server on a seperate node", %{user_id: user_id} do
     # start a user on node1
-    {:ok, pid} = startup_user @node1, "1"
-    assert process_alive?(@node1, pid)
+    {:ok, pid} = User.startup user_id, node: @node1
+    assert alive?(pid)
 
-    assert pid == Highlander.Shared.User.lookup("1")
+    assert pid == User.lookup(user_id)
 
     # set the info over on node2
-    {:ok, _} = set_user_info(@node2, "1", %{email: "me@example.com"})
+    {:ok, _} = :rpc.call(@node2, User, :set_info, [user_id, %{"email" => "me@example.com"}])
 
     # get the info here on primary
-    {:ok, info} = Highlander.Shared.User.get_info "1"
-    assert info.email == "me@example.com"
+    {:ok, info} = User.get_info user_id
+    assert info["email"] == "me@example.com"
 
-    cleanup_on_node @node1, pid
+    cleanup pid
   end
 
-  test "cannot create two servers for the same user id on two different nodes" do
-    {:ok, pid} = startup_user @node1, "1"
-    assert process_alive?(@node1, pid)
+  test "cannot create two servers for the same user id on two different nodes", %{user_id: user_id} do
+    {:ok, pid} = User.startup user_id, node: @node1
+    assert alive?(pid)
 
-    assert pid == Highlander.Shared.User.lookup("1")
+    assert pid == User.lookup(user_id)
 
-    {:error, _msg} = startup_user @node2, "1"
+    {:error, _msg} = User.startup user_id, node: @node2
+    {:error, _msg} = User.startup user_id, node: @primary
 
-    assert pid == Highlander.Shared.User.lookup("1")
+    assert pid == User.lookup(user_id)
 
-    cleanup_on_node @node1, pid
+    cleanup pid
   end
 end
