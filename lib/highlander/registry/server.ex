@@ -1,4 +1,6 @@
 defmodule Highlander.Registry.Server do
+  alias Highlander.Registry
+  alias Highlander.Registry.ZK
   use GenServer
   require Logger
 
@@ -10,63 +12,146 @@ defmodule Highlander.Registry.Server do
     pids = %{}
     names = %{}
 
-    hostname = Map.get_lazy System.get_env, "ACTOR_HOSTNAME", fn -> UUID.uuid1(:hex) end
-
-    {:ok, %{pids: pids, names: names, hostname: hostname}}
+    {:ok, %{server_pids: pids, names: names}}
   end
 
-  def add(state, {type, id} = name, pid) when is_pid(pid) and is_atom(type) and is_binary(id) do
+  defp add(state, {type, id} = name, %{server_pid: server_pid} = info) when is_pid(server_pid) and is_atom(type) and is_binary(id) do
     state
-    |> put_in([:pids, name], pid)
-    |> put_in([:names, pid], name)
+    |> put_in([:server_pids, server_pid], name) # to make it easier to lookup by server_pid in case that server goes down
+    |> put_in([:names, name], info)
   end
 
-  def delete(%{pids: pids, names: names} = state, {type, id} = name) when is_atom(type) and is_binary(id) do
-    pid = Map.get pids, name
-    new_pids = Map.delete pids, name
-    new_names = Map.delete names, pid
+  defp delete(state, {type, id} = name) when is_atom(type) and is_binary(id) do
+    case Map.get(state.names, name) do
+      %{server_pid: server_pid} ->
+        new_server_pids = Map.delete state.server_pids, server_pid
+        new_names = Map.delete state.names, name
 
-    %{state | pids: new_pids, names: new_names}
+        %{state | server_pids: new_server_pids, names: new_names}
+      nil -> state
+    end
   end
 
-  def delete(%{names: names} = state, pid) when is_pid(pid) do
-    name = Map.get names, pid
-    delete state, name
+  defp info(state, name) do
+    Map.get(state.names, name, :undefined)
   end
 
-  def delete(state, nil) do
-    Logger.error "Attempting to delete nil from the registry state"
-    state
+  defp name(state, pid) when is_pid(pid) do
+    Map.get(state.server_pids, pid)
   end
 
-  def handle_call({:hostname}, _from, %{hostname: hostname} = state) do
-    {:reply, hostname, state}
+  defp server_pid(state, name) do
+    case info(state, name) do
+      :undefined -> :undefined
+      %{server_pid: server_pid} -> server_pid
+    end
   end
 
-  def handle_call({:whereis_name, name}, _from, state) do
-    pid = Map.get state.pids, name, :undefined
-    {:reply, pid, state}
-  end
-
-  def handle_call({:register_name, name, pid}, _from, %{pids: pids} = state) do
-    case Map.get(pids, name) do
-      nil ->
+  defp register(state, name, pid) do
+    case server_pid(state, name) do
+      :undefined ->
+        Logger.debug "#{node()} registering #{inspect pid} in state.pids"
         Process.monitor pid
-        new_state = add state, name, pid
-        {:reply, :yes, new_state}
+        case ZK.create_znode(name) do
+          {:ok, zk_pid} ->
+            info = %{server_pid: pid, zk_pid: zk_pid}
+            Logger.debug "#{node()} adding #{inspect name}/(#{inspect info}) to state.pids"
+            {:ok, add(state, name, info)}
+          {:error, reason} ->
+            Logger.debug "#{node()} there was an error creating the zookeeper node for #{inspect name}: #{inspect reason} (not updating state.pids)"
+            {:error, reason, state}
+        end
       _ ->
-        {:reply, :no, state}
+        Logger.debug "#{node()} register_name: already registered #{inspect name} in state.pids"
+        {:error, :already_registered, state}
+    end
+  end
+
+  defp unregister(state, { _type, _id } = name) do
+    Logger.debug "#{node()} remove(#{inspect name})"
+    case info(state, name) do
+      :undefined ->
+        Logger.debug "#{node()} not in my state.pids"
+        state
+      %{server_pid: server_pid, zk_pid: zk_pid} ->
+        Logger.debug "#{node()} in my state.pids: #{inspect server_pid}"
+        :ok = ZK.delete_znode(zk_pid)
+        delete(state, name)
+    end
+  end
+
+  defp unregister(state, pid) when is_pid(pid) do
+    unregister(state, name(state, pid))
+  end
+
+  defp unregister(state, nil), do: state
+
+  defp resolve(node_name) when is_binary(node_name) do
+    if node_name == to_string(Node.self) do
+      Node.self
+    else
+      Node.list(:known)
+      |> Enum.find(:unreachable, &(node_name == to_string(&1)))
+    end
+  end
+  defp resolve(nil), do: nil
+
+  defp whereis_on_node(node_name, name) do
+    case resolve(node_name) do
+      :unreachable ->
+        Logger.debug "#{node()} -> #{node_name} is unreachable"
+        :undefined
+      node ->
+        Logger.debug "#{node} found #{node_name}: #{inspect([name, node])}"
+        case :rpc.call(node, Registry, :whereis_name, [name, local: true]) do
+          {:badrpc, _reason} -> :undefined
+          result -> result
+        end
+    end
+  end
+
+  defp whereis_remote(name) do
+    case ZK.get_node_name(name) do
+      :undefined ->
+        Logger.debug "#{node()} didn't find #{inspect name} in zookeeper"
+        :undefined
+      node_name ->
+        Logger.debug "#{node()} found #{inspect name} in zookeeper: #{inspect node_name}"
+        whereis_on_node(node_name, name)
+    end
+  end
+
+  def handle_call({:whereis_name, name, opts}, _from, state) do
+    Logger.debug "#{node()} handle_call whereis_name: #{inspect name}"
+    case info(state, name) do
+      :undefined ->
+        if opts[:local] do
+          {:reply, :undefined, state}
+        else
+          Logger.debug "#{node()} not in my state.pids"
+          {:reply, whereis_remote(name), state}
+        end
+      %{server_pid: server_pid} ->
+        Logger.debug "#{node()} in my state.pids: #{inspect server_pid}"
+        {:reply, server_pid, state}
+    end
+  end
+
+  def handle_call({:register_name, name, pid}, _from, state) do
+    case register(state, name, pid) do
+      {:ok, state} -> {:reply, :yes, state}
+      {:error, _reason, state} -> {:reply, :no, state}
     end
   end
 
   def handle_cast({:unregister_name, name}, state) do
-    new_state = delete state, name
-    {:noreply, new_state}
+    Logger.debug "#{node()} unregister_name: #{inspect name}"
+    {:noreply, unregister(state, name)}
   end
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
-    new_state = delete state, pid
-    {:noreply, new_state}
+    Logger.debug "#{node()} :DOWN: #{inspect pid}"
+    {:noreply, unregister(state, pid)}
   end
 
   def terminate(reason, _state) do

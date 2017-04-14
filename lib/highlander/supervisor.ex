@@ -6,12 +6,14 @@ defmodule Highlander.Supervisor do
   end
 
   def init(_) do
-    host = Application.fetch_env! :highlander, :zookeeper_host
+    zookeeper_host = Application.fetch_env! :highlander, :zookeeper_host
+    redis_host = Application.fetch_env! :highlander, :redis_host
 
     children = [
-      worker(Zookeeper.Client, [host, [stop_on_disconnect: true, name: :zk]], []),
+      worker(Zookeeper.Client, [zookeeper_host, [stop_on_disconnect: true, name: :zk]], []),
       worker(Highlander.Registry.Server, [], []),
-      worker(Highlander.Shared.Info.Server, [], []),
+      worker(Highlander.Registry.NodeCycleServer, [], []),
+      worker(Redix, [redis_host, [name: :redix]], []),
       supervisor(Highlander.Shared.Supervisor, [], [])
     ]
 
