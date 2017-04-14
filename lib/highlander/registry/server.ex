@@ -50,31 +50,31 @@ defmodule Highlander.Registry.Server do
   defp register(state, name, pid) do
     case server_pid(state, name) do
       :undefined ->
-        Logger.debug "#{node} registering #{inspect pid} in state.pids"
+        Logger.debug "#{node()} registering #{inspect pid} in state.pids"
         Process.monitor pid
         case ZK.create_znode(name) do
           {:ok, zk_pid} ->
             info = %{server_pid: pid, zk_pid: zk_pid}
-            Logger.debug "#{node} adding #{inspect name}/(#{inspect info}) to state.pids"
+            Logger.debug "#{node()} adding #{inspect name}/(#{inspect info}) to state.pids"
             {:ok, add(state, name, info)}
           {:error, reason} ->
-            Logger.debug "#{node} there was an error creating the zookeeper node for #{inspect name}: #{inspect reason} (not updating state.pids)"
+            Logger.debug "#{node()} there was an error creating the zookeeper node for #{inspect name}: #{inspect reason} (not updating state.pids)"
             {:error, reason, state}
         end
       _ ->
-        Logger.debug "#{node} register_name: already registered #{inspect name} in state.pids"
+        Logger.debug "#{node()} register_name: already registered #{inspect name} in state.pids"
         {:error, :already_registered, state}
     end
   end
 
   defp unregister(state, { _type, _id } = name) do
-    Logger.debug "#{node} remove(#{inspect name})"
+    Logger.debug "#{node()} remove(#{inspect name})"
     case info(state, name) do
       :undefined ->
-        Logger.debug "#{node} not in my state.pids"
+        Logger.debug "#{node()} not in my state.pids"
         state
       %{server_pid: server_pid, zk_pid: zk_pid} ->
-        Logger.debug "#{node} in my state.pids: #{inspect server_pid}"
+        Logger.debug "#{node()} in my state.pids: #{inspect server_pid}"
         :ok = ZK.delete_znode(zk_pid)
         delete(state, name)
     end
@@ -99,7 +99,7 @@ defmodule Highlander.Registry.Server do
   defp whereis_on_node(node_name, name) do
     case resolve(node_name) do
       :unreachable ->
-        Logger.debug "#{node} -> #{node_name} is unreachable"
+        Logger.debug "#{node()} -> #{node_name} is unreachable"
         :undefined
       node ->
         Logger.debug "#{node} found #{node_name}: #{inspect([name, node])}"
@@ -113,26 +113,26 @@ defmodule Highlander.Registry.Server do
   defp whereis_remote(name) do
     case ZK.get_node_name(name) do
       :undefined ->
-        Logger.debug "#{node} didn't find #{inspect name} in zookeeper"
+        Logger.debug "#{node()} didn't find #{inspect name} in zookeeper"
         :undefined
       node_name ->
-        Logger.debug "#{node} found #{inspect name} in zookeeper: #{inspect node_name}"
+        Logger.debug "#{node()} found #{inspect name} in zookeeper: #{inspect node_name}"
         whereis_on_node(node_name, name)
     end
   end
 
   def handle_call({:whereis_name, name, opts}, _from, state) do
-    Logger.debug "#{node} handle_call whereis_name: #{inspect name}"
+    Logger.debug "#{node()} handle_call whereis_name: #{inspect name}"
     case info(state, name) do
       :undefined ->
         if opts[:local] do
           {:reply, :undefined, state}
         else
-          Logger.debug "#{node} not in my state.pids"
+          Logger.debug "#{node()} not in my state.pids"
           {:reply, whereis_remote(name), state}
         end
       %{server_pid: server_pid} ->
-        Logger.debug "#{node} in my state.pids: #{inspect server_pid}"
+        Logger.debug "#{node()} in my state.pids: #{inspect server_pid}"
         {:reply, server_pid, state}
     end
   end
@@ -145,12 +145,12 @@ defmodule Highlander.Registry.Server do
   end
 
   def handle_cast({:unregister_name, name}, state) do
-    Logger.debug "#{node} unregister_name: #{inspect name}"
+    Logger.debug "#{node()} unregister_name: #{inspect name}"
     {:noreply, unregister(state, name)}
   end
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
-    Logger.debug "#{node} :DOWN: #{inspect pid}"
+    Logger.debug "#{node()} :DOWN: #{inspect pid}"
     {:noreply, unregister(state, pid)}
   end
 
