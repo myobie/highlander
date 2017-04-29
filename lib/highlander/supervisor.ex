@@ -14,7 +14,7 @@ defmodule Highlander.Supervisor do
       worker(Highlander.Registry.Server, [], []),
       worker(Highlander.Registry.NodeCycleServer, [], []),
       worker(Redix, [redis_host, [name: :redix]], []),
-      supervisor(Highlander.Shared.Supervisor, [], [])
+      supervisor(Highlander.Object.Supervisor, [], [])
     ]
 
     supervise children, strategy: :rest_for_one

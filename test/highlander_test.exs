@@ -1,7 +1,7 @@
 defmodule HighlanderTest do
   require Logger
   use HighlanderTest.NodeCase, async: true
-  alias Highlander.Shared.User
+  alias Highlander.Object
   doctest Highlander
 
   setup_all do
@@ -10,74 +10,74 @@ defmodule HighlanderTest do
   end
 
   setup do
-    {:ok, %{user_id: UUID.uuid4}}
+    {:ok, %{id: UUID.uuid4, type: :user}}
   end
 
-  test "can start user servers", %{user_id: user_id} do
-    {:ok, pid} = User.startup user_id
-    {:ok, state} = User.get_in_memory_state user_id
-    assert state.id == user_id
+  test "can start user servers", %{id: id, type: type} do
+    {:ok, pid} = Object.startup {type, id}
+    {:ok, state} = Object.get_in_memory_state {type, id}
+    assert state.id == id
     cleanup pid
 
-    {:error, _} = User.get_in_memory_state user_id
+    {:error, _} = Object.get_in_memory_state {type, id}
   end
 
-  test "servers auto start when asked to do something", %{user_id: user_id} do
-    {:ok, _} = User.set_info user_id, %{"email" => "me@example.com"}
+  test "servers auto start when asked to do something", %{id: id, type: type} do
+    {:ok, _} = Object.put {type, id}, %{"email" => "me@example.com"}
 
-    pid = User.lookup user_id
+    pid = Object.lookup {type, id}
     assert is_pid(pid)
 
-    {:ok, info} = User.get_info user_id
+    {:ok, info} = Object.get {type, id}
     assert info["email"] == "me@example.com"
     cleanup pid
 
-    nil = User.lookup user_id
+    nil = Object.lookup {type, id}
 
-    {:ok, info} = User.get_info user_id
+    {:ok, info} = Object.get {type, id}
     assert info["email"] == "me@example.com"
 
-    pid = User.lookup user_id
+    pid = Object.lookup {type, id}
     assert is_pid(pid)
     cleanup pid
   end
 
-  test "cannot create two servers for the same user id", %{user_id: user_id} do
-    {:ok, pid} = User.startup user_id
+  test "cannot create two servers for the same user id", %{id: id, type: type} do
+    {:ok, pid} = Object.startup {type, id}
 
-    {:error, _msg} = User.startup user_id
+    {:error, _msg} = Object.startup {type, id}
 
     assert alive?(pid)
     cleanup pid
   end
 
-  test "can start a server on a seperate node", %{user_id: user_id} do
+  test "can start a server on a seperate node", %{id: id, type: type} do
     # start a user on node1
-    {:ok, pid} = User.startup user_id, node: @node1
+    {:ok, pid} = Object.startup {type, id}, node: @node1
     assert alive?(pid)
 
-    assert pid == User.lookup(user_id)
+    assert pid == Object.lookup({type, id})
 
     # set the info over on node2
-    {:ok, _} = :rpc.call(@node2, User, :set_info, [user_id, %{"email" => "me@example.com"}])
+    {:ok, _} = :rpc.call(@node2, Object, :put, [{type, id}, %{"email" => "me@example.com"}])
 
     # get the info here on primary
-    {:ok, info} = User.get_info user_id
+    {:ok, info} = Object.get {type, id}
     assert info["email"] == "me@example.com"
 
     cleanup pid
   end
 
-  test "cannot create two servers for the same user id on two different nodes", %{user_id: user_id} do
-    {:ok, pid} = User.startup user_id, node: @node1
+  test "cannot create two servers for the same user id on two different nodes", %{id: id, type: type} do
+    {:ok, pid} = Object.startup {type, id}, node: @node1
     assert alive?(pid)
 
-    assert pid == User.lookup(user_id)
+    assert pid == Object.lookup({type, id})
 
-    {:error, _msg} = User.startup user_id, node: @node2
-    {:error, _msg} = User.startup user_id, node: @primary
+    {:error, _msg} = Object.startup {type, id}, node: @node2
+    {:error, _msg} = Object.startup {type, id}, node: @primary
 
-    assert pid == User.lookup(user_id)
+    assert pid == Object.lookup({type, id})
 
     cleanup pid
   end

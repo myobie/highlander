@@ -40,7 +40,7 @@ defmodule Highlander.Registry.ZK do
   def get_node_name({ type, _id } = name, znode_name) when is_atom(type) and is_binary(znode_name) do
     case Zookeeper.Client.get(:zk, path(name, znode_name)) do
       {:ok, {value, _stat}} ->
-        Logger.debug "#{node} value in zookeeper for #{path(name, znode_name)}: #{inspect value}"
+        Logger.debug "#{node()} value in zookeeper for #{path(name, znode_name)}: #{inspect value}"
         value
       _ -> :undefined
     end

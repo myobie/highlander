@@ -1,8 +1,8 @@
-defmodule Highlander.Shared.Info do
+defmodule Highlander.PersistedState do
   require Logger
-  alias Highlander.Shared.Info.Server
 
-  def get(bucket) do
+  def get({type, id}) do
+    bucket = "objects:#{type}:#{id}"
     case Redix.command!(:redix, ~w(GET #{bucket})) do
       nil -> %{}
       "" -> %{}
@@ -12,8 +12,9 @@ defmodule Highlander.Shared.Info do
     end
   end
 
-  def set(bucket, info) do
-    json = Poison.encode!(info)
+  def put({type, id}, state) do
+    json = Poison.encode!(state)
+    bucket = "objects:#{type}:#{id}"
     Logger.debug "setting into redis for #{bucket}: #{inspect json}"
     Redix.command!(:redix, ~w(SET #{bucket} #{json}))
   end

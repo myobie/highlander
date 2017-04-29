@@ -27,7 +27,7 @@ defmodule Highlander.Registry.ZK.ZNode do
     path_prefix = prefix(name, uuid)
     node_name = to_string Node.self
 
-    Logger.debug "#{node} creating #{path_prefix}: [#{node_name}] in zookeeper"
+    Logger.debug "#{node()} creating #{path_prefix}: [#{node_name}] in zookeeper"
     {:ok, created_path} = Zookeeper.Client.create(:zk, path_prefix, node_name, makepath: true, create_mode: :ephemeral_sequential)
 
     znode_name = Path.basename(created_path)
@@ -37,7 +37,7 @@ defmodule Highlander.Registry.ZK.ZNode do
   end
 
   def terminate(_reason, %{name: name, znode_name: znode_name}) do
-    Logger.debug "#{node} deleteing #{path(name, znode_name)}"
+    Logger.debug "#{node()} deleteing #{path(name, znode_name)}"
     Zookeeper.Client.delete(:zk, path(name, znode_name))
   end
 
