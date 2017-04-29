@@ -6,6 +6,59 @@ defmodule Highlander.Object do
   defdelegate via_tuple(user_id), to: Server
   defdelegate start_child(supervisor, child_spec_or_args), to: Elixir.Supervisor
 
+  @type address :: {atom, binary}
+
+  @callback get(binary) :: {:ok, map} | no_return
+  @callback put(binary, map) :: :ok | no_return
+
+  defmacro __using__([type: type]) do
+    quote do
+      @behaviour unquote(__MODULE__)
+      import unquote(__MODULE__), only: [defobject: 1]
+
+      def get(id) do
+        unquote(__MODULE__).get_persisted_state({unquote(type), id})
+      end
+
+      def put(id, new_persisted_state) do
+        unquote(__MODULE__).put_persisted_state({unquote(type), id}, new_persisted_state)
+      end
+
+      defoverridable get: 1, put: 2
+    end
+  end
+
+  defmacro defobject(opts) do
+    quote do
+      defstruct unquote(opts)
+
+      def get(id) do
+        {:ok, state} = super(id)
+
+        object = Keyword.keys(unquote(opts))
+                 |> Enum.reduce(%__MODULE__{}, fn (key, object) ->
+                   case Map.get(state, to_string(key)) do
+                     nil -> object
+                     value -> Map.put object, key, value
+                   end
+                 end)
+
+        {:ok, object}
+      end
+
+      def put(id, new_object) do
+        state = Keyword.keys(unquote(opts))
+                |> Enum.reduce(%{}, fn (key, state) ->
+                  Map.put state, to_string(key), Map.get(new_object, key)
+                end)
+
+        {:ok, _} = super(id, state)
+
+        {:ok, new_object}
+      end
+    end
+  end
+
   def startup({type, id}, opts \\ []) do
     cond do
       opts[:local] ->
@@ -45,11 +98,11 @@ defmodule Highlander.Object do
     call {type, id}, {:get_state}
   end
 
-  def get({type, id}) do
+  def get_persisted_state({type, id}) do
     startup_and_call {type, id}, {:get_persisted_state}
   end
 
-  def put({type, id}, new_persisted_state) do
+  def put_persisted_state({type, id}, new_persisted_state) do
     startup_and_call {type, id}, {:put_persisted_state, new_persisted_state}
   end
 end

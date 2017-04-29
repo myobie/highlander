@@ -27,7 +27,7 @@ defmodule Highlander.Object.Server do
   def handle_call({:put_persisted_state, persisted_state}, _from, state) do
     PersistedState.put({state.type, state.id}, persisted_state)
     new_state = %{state | persisted_state: persisted_state}
-    {:reply, :ok, new_state}
+    {:reply, persisted_state, new_state}
   end
 
   def terminate(reason, state) do

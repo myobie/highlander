@@ -2,15 +2,18 @@ defmodule HighlanderTest do
   require Logger
   use HighlanderTest.NodeCase, async: true
   alias Highlander.Object
+  alias HighlanderTest.{User, Todo}
   doctest Highlander
 
   setup_all do
     # clear out all actors in the db
     Zookeeper.Client.delete :zk, "/__shared_objects__", -1, true
+    Redix.command!(:redix, ~w(FLUSHDB))
+    :ok
   end
 
   setup do
-    {:ok, %{id: UUID.uuid4, type: :user}}
+    {:ok, %{id: UUID.uuid4(), type: :user}}
   end
 
   test "can start user servers", %{id: id, type: type} do
@@ -23,18 +26,18 @@ defmodule HighlanderTest do
   end
 
   test "servers auto start when asked to do something", %{id: id, type: type} do
-    {:ok, _} = Object.put {type, id}, %{"email" => "me@example.com"}
+    {:ok, _} = Object.put_persisted_state {type, id}, %{"email" => "me@example.com"}
 
     pid = Object.lookup {type, id}
     assert is_pid(pid)
 
-    {:ok, info} = Object.get {type, id}
+    {:ok, info} = Object.get_persisted_state {type, id}
     assert info["email"] == "me@example.com"
     cleanup pid
 
     nil = Object.lookup {type, id}
 
-    {:ok, info} = Object.get {type, id}
+    {:ok, info} = Object.get_persisted_state {type, id}
     assert info["email"] == "me@example.com"
 
     pid = Object.lookup {type, id}
@@ -59,10 +62,10 @@ defmodule HighlanderTest do
     assert pid == Object.lookup({type, id})
 
     # set the info over on node2
-    {:ok, _} = :rpc.call(@node2, Object, :put, [{type, id}, %{"email" => "me@example.com"}])
+    {:ok, _} = :rpc.call(@node2, Object, :put_persisted_state, [{type, id}, %{"email" => "me@example.com"}])
 
-    # get the info here on primary
-    {:ok, info} = Object.get {type, id}
+    # get_persisted_state the info here on primary
+    {:ok, info} = Object.get_persisted_state {type, id}
     assert info["email"] == "me@example.com"
 
     cleanup pid
@@ -80,5 +83,35 @@ defmodule HighlanderTest do
     assert pid == Object.lookup({type, id})
 
     cleanup pid
+  end
+
+  test "can create named objects", %{id: id} do
+    {:ok, %{}} = User.get id
+
+    {:ok, _} = User.put id, %{"name" => "Nathan"}
+
+    {:ok, info} = User.get id
+
+    {:ok, same_info} = Object.get_persisted_state {:user, id}
+
+    assert info == same_info
+  end
+
+  test "can create objects that act like structs" do
+    id = UUID.uuid4()
+
+    {:ok, todo} = Todo.get id
+
+    assert todo.completed == false
+    assert todo.title == ""
+    assert todo.color == :blue
+
+    todo = %{todo | title: "Hello"}
+
+    {:ok, _} = Todo.put id, todo
+
+    {:ok, todo} = Todo.get id
+
+    assert todo.title == "Hello"
   end
 end
