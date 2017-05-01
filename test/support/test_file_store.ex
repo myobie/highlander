@@ -1,8 +1,10 @@
 defmodule Highlander.TestFileStore do
   @behaviour Highlander.FileStore
 
+  @name {:global, __MODULE__}
+
   def put(key, data, options) do
-    Agent.get_and_update(__MODULE__, fn %{uploads: uploads, errors: errors, files: files} = state ->
+    Agent.get_and_update(@name, fn %{uploads: uploads, errors: errors, files: files} = state ->
       # check if there are any errors queued up
       {error, errors} = List.pop_at(errors, 0)
 
@@ -29,7 +31,7 @@ defmodule Highlander.TestFileStore do
   end
 
   def get(key) do
-    Agent.get_and_update(__MODULE__, fn %{downloads: downloads, files: files, errors: errors} = state ->
+    Agent.get_and_update(@name, fn %{downloads: downloads, files: files, errors: errors} = state ->
       {error, errors} = List.pop_at(errors, 0)
 
       if error do
@@ -62,14 +64,14 @@ defmodule Highlander.TestFileStore do
   # test helpers
 
   def should_error(error \\ :internal_server_error) do
-    Agent.update(__MODULE__, fn %{errors: errors} = state ->
+    Agent.update(@name, fn %{errors: errors} = state ->
       errors = [error | errors]
       %{state | errors: errors}
     end)
   end
 
   def put_file(key, data) do
-    Agent.update(__MODULE__, fn %{files: files} = state ->
+    Agent.update(@name, fn %{files: files} = state ->
       files = Map.put(files, key, data)
       %{state | files: files}
     end)
@@ -80,7 +82,7 @@ defmodule Highlander.TestFileStore do
   end
 
   def recent_uploads do
-    Agent.get(__MODULE__, fn %{uploads: uploads} -> uploads end)
+    Agent.get(@name, fn %{uploads: uploads} -> uploads end)
   end
 
   def last_download do
@@ -88,7 +90,7 @@ defmodule Highlander.TestFileStore do
   end
 
   def recent_downloads do
-    Agent.get(__MODULE__, fn %{downloads: downloads} -> downloads end)
+    Agent.get(@name, fn %{downloads: downloads} -> downloads end)
   end
 
   # agent management
@@ -96,14 +98,14 @@ defmodule Highlander.TestFileStore do
   @empty_state %{uploads: [], downloads: [], errors: [], files: %{}}
 
   def start_link do
-    Agent.start_link(fn -> @empty_state end, name: __MODULE__)
+    Agent.start_link(fn -> @empty_state end, name: @name)
   end
 
   def stop do
-    Agent.stop(__MODULE__)
+    Agent.stop(@name)
   end
 
   def clear do
-    Agent.update(__MODULE__, fn _state -> @empty_state end)
+    Agent.update(@name, fn _state -> @empty_state end)
   end
 end

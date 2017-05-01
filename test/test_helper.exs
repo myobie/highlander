@@ -10,6 +10,8 @@ defmodule HighlanderTest.Todo do
   defobject title: "", completed: false, color: :blue
 end
 
+{:ok, _} = Highlander.TestFileStore.start_link()
+
 cond do
   :clustered in exclude ->
     ExUnit.start()
