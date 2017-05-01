@@ -10,8 +10,8 @@ defmodule Highlander.Registry do
 
   # A safe way to run a function on another node
   def call(node, func) when is_atom(node) do
-    parent = self
-    ref = make_ref
+    parent = self()
+    ref = make_ref()
 
     pid = Node.spawn_link(node, fn ->
       result = func.()
@@ -57,17 +57,17 @@ defmodule Highlander.Registry do
   end
 
   def whereis_name(name, opts \\ []) do
-    Logger.debug "#{node} whereis_name: #{inspect name}"
+    Logger.debug "#{node()} whereis_name: #{inspect name}"
     GenServer.call(Server, {:whereis_name, name, opts})
   end
 
   def register_name(name, pid) do
-    Logger.debug "#{node} register_name: #{inspect name}"
+    Logger.debug "#{node()} register_name: #{inspect name}"
     GenServer.call(Server, {:register_name, name, pid})
   end
 
   def unregister_name(name) do
-    Logger.debug "#{node} unregister_name: #{inspect name}"
+    Logger.debug "#{node()} unregister_name: #{inspect name}"
     GenServer.cast(Server, {:unregister_name, name})
   end
 end

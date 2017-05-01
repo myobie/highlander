@@ -125,7 +125,7 @@ defmodule Highlander.Registry.Server do
     Logger.debug "#{node()} handle_call whereis_name: #{inspect name}"
     case info(state, name) do
       :undefined ->
-        if opts[:local] do
+        if Keyword.get(opts, :local) do
           {:reply, :undefined, state}
         else
           Logger.debug "#{node()} not in my state.pids"
