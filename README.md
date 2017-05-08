@@ -61,6 +61,10 @@ I honestly don't know why there are so many negative articles about
 the correct solution to this problem. I don't know. I intend to write my own
 experiments with `gen_leader` to learn about it, but I have not had time.
 
+### What about `riak_core`?
+
+Sure. I am sure one can use `riak_*` to achieve something similar, but I don't think it's wise for me to head down that road yet. I'd love to see someone do that.
+
 ## Setup
 
 ### Docker
